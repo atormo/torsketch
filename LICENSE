@@ -20,6 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-This license applies to the source code only. The visual assets and font files
-under `public/` are excluded from this grant unless their respective rights
-holders state otherwise.
+This license applies to the source code and to
+`public/tormisketch-hills.png` to the extent the project authors hold rights
+in that generated output. Other visual assets and all font files under
+`public/` are excluded from this grant unless their respective rights holders
+state otherwise.

@@ -557,7 +557,7 @@ export default function TormiSketchPage() {
       <div
         className="fixed inset-0 z-[999] overflow-hidden select-none flex items-center justify-center"
         style={{
-          backgroundImage: "url('/bliss.jpg')",
+          backgroundImage: "url('/tormisketch-hills.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
