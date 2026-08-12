@@ -187,7 +187,6 @@ export default function TormiSketchPage() {
   const [pixelMode, setPixelMode] = useState(false);
   const [opacity, setOpacity] = useState(100);
   const [noBackground, setNoBackground] = useState(false);
-  const [sent, setSent] = useState(false);
   const [clearPending, setClearPending] = useState(false);
   const [booted, setBooted] = useState(false);
 
@@ -461,18 +460,6 @@ export default function TormiSketchPage() {
     link.click();
   }, [opacity, noBackground]);
 
-  const sendToTormius = useCallback(() => {
-    downloadDrawing();
-    setSent(true);
-    setTimeout(() => {
-      window.open(
-        "mailto:at@tormius.com?subject=I made a drawing for you&body=Hey Tormius! I made a drawing on your site. Find it attached :)%0A%0AHave a nice day",
-        "_blank"
-      );
-    }, 500);
-    setTimeout(() => setSent(false), 4000);
-  }, [downloadDrawing]);
-
   const handleSizeDial = useCallback((delta: number) => {
     brushAccum.current += delta;
     const steps = Math.trunc(brushAccum.current / BRUSH_STEP);
@@ -543,8 +530,6 @@ export default function TormiSketchPage() {
           line-height: 1;
         }
         .tsk-btn-white { background: white; color: black; }
-        .tsk-btn-send-idle { background: white; color: black; border: none; }
-        .tsk-btn-send-done { background: transparent; color: white; border: 1px solid rgba(255,255,255,0.35); }
         @media (max-width: 767px) {
           .tsk-btn {
             font-size: 11px;
@@ -611,12 +596,7 @@ export default function TormiSketchPage() {
           transition={{ duration: 0.4, ease: "easeOut" }}
         >
           {/* Top bar */}
-          <div className="flex items-center justify-between flex-shrink-0 mb-4 md:mb-5">
-            <a href="https://tormius.com" className="tsk-btn tsk-btn-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/icons/iconarrow.png" alt="" width={13} height={13} style={{ filter: "brightness(0)", transform: "rotate(180deg)" }} />
-              <span className="hidden md:inline"> back to home</span><span className="md:hidden"> back</span>
-            </a>
+          <div className="flex items-center justify-end flex-shrink-0 mb-4 md:mb-5">
             <div className="flex items-center gap-1.5 md:gap-2">
               {/* transparent bg — desktop only */}
               <div className="hidden md:flex items-center gap-1.5">
@@ -642,19 +622,6 @@ export default function TormiSketchPage() {
                 save
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/icons/iconarrow.png" alt="" width={13} height={13} style={{ filter: "brightness(0)", transform: "rotate(90deg)" }} />
-              </button>
-              {/* send */}
-              <button
-                onClick={sendToTormius}
-                className={`tsk-btn ${sent ? "tsk-btn-send-done" : "tsk-btn-send-idle"}`}
-              >
-                {sent ? "check email ✓" : (
-                  <>
-                    send drawing to tormius
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/icons/iconarrow.png" alt="" width={13} height={13} style={{ filter: "brightness(0)", transform: "rotate(-45deg)" }} />
-                  </>
-                )}
               </button>
             </div>
           </div>
