@@ -36,4 +36,7 @@ Bug reports and pull requests are welcome. Please run `pnpm lint` and `pnpm buil
 
 ## License
 
-The source code is available under the MIT License. Visual assets and bundled fonts are excluded from the MIT grant unless their respective rights holders state otherwise; review their redistribution rights before publishing a fork.
+The source code is available under the MIT License.
+
+> [!WARNING]
+> This repository is not ready to be made public with its current assets. The bundled Mobilo and Zed Display font files do not include redistribution rights, and `bliss.jpg` is based on the copyrighted Windows XP “Bliss” photograph. These files are excluded from the MIT grant. Obtain explicit redistribution permission or replace them with open-source alternatives, then remove them from the Git history before publishing the repository.

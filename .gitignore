@@ -11,6 +11,7 @@
 
 # Test output
 /coverage
+/.playwright-cli
 
 # Local environment and deployment files
 .env*
@@ -22,6 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.tsbuildinfo
+next-env.d.ts
 
 # Operating-system files
 .DS_Store
