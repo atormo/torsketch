@@ -542,9 +542,10 @@ export default function TormiSketchPage() {
       <div
         className="fixed inset-0 z-[999] overflow-hidden select-none flex items-center justify-center"
         style={{
-          backgroundImage: "url('/tormisketch-hills.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.14) 0 0.7px, transparent 0.8px), url('/tormisketch-hills.png')",
+          backgroundSize: "4px 4px, cover",
+          backgroundPosition: "0 0, center",
+          backgroundRepeat: "repeat, no-repeat",
         }}
       >
         <AnimatePresence mode="wait">
