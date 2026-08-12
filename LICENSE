@@ -22,6 +22,7 @@ SOFTWARE.
 
 This license applies to the source code and to
 `public/tormisketch-hills.png` to the extent the project authors hold rights
-in that generated output. Other visual assets and all font files under
-`public/` are excluded from this grant unless their respective rights holders
-state otherwise.
+in that generated output. Space Grotesk and Michroma are distributed under
+the SIL Open Font License 1.1; see the licence files in `src/fonts`. Other
+visual assets are excluded from this grant unless their respective rights
+holders state otherwise.

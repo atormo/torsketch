@@ -15,7 +15,7 @@ const PALETTE = [
 
 type Tool = "pen" | "eraser";
 
-const ZED = { fontFamily: "var(--font-zed)" } as const;
+const INTERFACE_FONT = { fontFamily: "var(--font-interface)" } as const;
 
 // Bresenham integer line — visits every grid cell between two points
 function bresenham(
@@ -111,10 +111,10 @@ function Dial({ label, value, unit, min, max, onRotate, textLeft }: DialProps) {
 
   const textBlock = (
     <div className="leading-tight" style={{ minWidth: 56, textAlign: textLeft ? "right" : "left" }}>
-      <span style={{ ...ZED, display: "block", fontSize: 10, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>
+      <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 10, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>
         {label}
       </span>
-      <span style={{ ...ZED, fontSize: 17, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ ...INTERFACE_FONT, fontSize: 17, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>
         {value}{unit}
       </span>
     </div>
@@ -509,7 +509,7 @@ export default function TormiSketchPage() {
   });
 
   const miniCtrlBtn: React.CSSProperties = {
-    ...ZED, width: 28, height: 28, borderRadius: 8,
+    ...INTERFACE_FONT, width: 28, height: 28, borderRadius: 8,
     background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)",
     display: "flex", alignItems: "center", justifyContent: "center",
     fontSize: 17, fontWeight: 700, cursor: "pointer", flexShrink: 0, border: "none",
@@ -527,7 +527,7 @@ export default function TormiSketchPage() {
           to   { clip-path: inset(0% 0 0 0); }
         }
         .tsk-btn {
-          font-family: var(--font-zed);
+          font-family: var(--font-interface);
           font-size: 13px;
           font-weight: 500;
           padding: 9px 20px 10px;
@@ -578,8 +578,8 @@ export default function TormiSketchPage() {
                   <span
                     key={i}
                     style={{
-                      fontFamily: "var(--font-mobilo)",
-                      fontWeight: 700,
+                      fontFamily: "var(--font-display)",
+                      fontWeight: 400,
                       fontSize: 52,
                       color: "white",
                       display: "inline-block",
@@ -623,7 +623,7 @@ export default function TormiSketchPage() {
                 <label
                   style={{
                     display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
-                    ...ZED, fontSize: 11, fontWeight: 500,
+                    ...INTERFACE_FONT, fontSize: 11, fontWeight: 500,
                     color: noBackground ? "white" : "rgba(255,255,255,0.45)",
                     userSelect: "none",
                   }}
@@ -726,19 +726,19 @@ export default function TormiSketchPage() {
                 <button aria-label="Use pen" onClick={() => setTool("pen")} style={toolBtnStyle(tool === "pen")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/icons/iconpen.png" alt="" width={28} height={28} style={{ filter: tool === "pen" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "pen" ? 1 : 0.55 }} />
-                  <span style={{ ...ZED, fontSize: 9, fontWeight: 600 }}>pen</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>pen</span>
                 </button>
                 <button aria-label="Use eraser" onClick={() => setTool("eraser")} style={toolBtnStyle(tool === "eraser")}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/icons/iconerase.png" alt="" width={28} height={28} style={{ filter: tool === "eraser" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "eraser" ? 1 : 0.55 }} />
-                  <span style={{ ...ZED, fontSize: 9, fontWeight: 600 }}>erase</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>erase</span>
                 </button>
                 {/* thin divider */}
                 <div style={{ width: 1, height: 36, background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />
                 <button aria-label="Toggle pixel mode" aria-pressed={pixelMode} onClick={() => setPixelMode((v) => !v)} style={toolBtnStyle(pixelMode)}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/icons/iconpixel.png" alt="" width={28} height={28} style={{ filter: pixelMode ? "brightness(0)" : "brightness(0) invert(1)", opacity: pixelMode ? 1 : 0.55 }} />
-                  <span style={{ ...ZED, fontSize: 9, fontWeight: 600 }}>pixel</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>pixel</span>
                 </button>
                 <button
                   aria-label={clearPending ? "Confirm clear drawing" : "Clear drawing"}
@@ -751,7 +751,7 @@ export default function TormiSketchPage() {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src="/icons/iconclear.png" alt="" width={28} height={28} style={{ filter: clearPending ? "brightness(0)" : "brightness(0) invert(1)", opacity: clearPending ? 1 : 0.55 }} />
-                  <span style={{ ...ZED, fontSize: 9, fontWeight: 600 }}>{clearPending ? "sure?" : "clear"}</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>{clearPending ? "sure?" : "clear"}</span>
                 </button>
               </div>
 
@@ -837,8 +837,8 @@ export default function TormiSketchPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button style={miniCtrlBtn} onClick={() => setBrushSize((s) => Math.max(1, s - 1))}>−</button>
                 <div style={{ textAlign: "center", minWidth: 40 }}>
-                  <span style={{ ...ZED, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>size</span>
-                  <span style={{ ...ZED, fontSize: 15, fontWeight: 700, color: "white" }}>{brushSize}px</span>
+                  <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>size</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 15, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>{brushSize}px</span>
                 </div>
                 <button style={miniCtrlBtn} onClick={() => setBrushSize((s) => Math.min(40, s + 1))}>+</button>
               </div>
@@ -846,8 +846,8 @@ export default function TormiSketchPage() {
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button style={miniCtrlBtn} onClick={() => setOpacity((o) => Math.max(5, o - 5))}>−</button>
                 <div style={{ textAlign: "center", minWidth: 40 }}>
-                  <span style={{ ...ZED, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>opac</span>
-                  <span style={{ ...ZED, fontSize: 15, fontWeight: 700, color: "white" }}>{opacity}%</span>
+                  <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>opac</span>
+                  <span style={{ ...INTERFACE_FONT, fontSize: 15, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>{opacity}%</span>
                 </div>
                 <button style={miniCtrlBtn} onClick={() => setOpacity((o) => Math.min(100, o + 5))}>+</button>
               </div>
@@ -871,7 +871,7 @@ export default function TormiSketchPage() {
                 boxShadow: "inset 0 1px 0 rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.055)",
               }}
             >
-              <span style={{ fontFamily: "var(--font-mobilo)", fontWeight: 700, fontSize: "clamp(16px, 2.4vw, 28px)", color: "rgba(255,255,255,0.86)", textShadow: "0 1px 3px rgba(0,0,0,0.55)" }}>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 400, fontSize: "clamp(14px, 2.1vw, 25px)", color: "rgba(255,255,255,0.86)", textShadow: "0 1px 3px rgba(0,0,0,0.55)", textWrap: "balance" }}>
                 TORMISKETCH
               </span>
             </div>
