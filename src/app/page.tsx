@@ -382,20 +382,18 @@ export default function TormiSketchPage() {
         .etch-brand-strip {
           display: flex;
           width: 56px;
-          height: 156px;
+          height: 320px;
           align-items: center;
           justify-content: center;
-          border-radius: 10px;
-          background: #f7f5ed;
-          color: #171717;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.34), inset 0 0 0 1px rgba(0,0,0,0.1);
+          color: #fff;
         }
         .etch-brand-word {
           font-family: var(--font-display);
-          font-size: 13px;
+          font-size: 30px;
           line-height: 1;
-          writing-mode: vertical-rl;
-          text-orientation: mixed;
+          white-space: nowrap;
+          text-shadow: 0 3px 0 rgba(0,0,0,0.3), 0 8px 20px rgba(0,0,0,0.58);
+          transform: rotate(90deg);
         }
 
         .etch-shell { cursor: grab; touch-action: none; }
@@ -435,8 +433,8 @@ export default function TormiSketchPage() {
 
         @media (max-width: 767px) {
           .etch-action { width: 48px; height: 48px; }
-          .etch-brand-strip { width: 48px; height: 112px; }
-          .etch-brand-word { font-size: 10px; }
+          .etch-brand-strip { width: 48px; height: 180px; }
+          .etch-brand-word { font-size: 22px; transform: rotate(90deg) scaleX(0.7); }
           .etch-knob { width: clamp(82px, 24vw, 102px); }
         }
 
@@ -476,7 +474,7 @@ export default function TormiSketchPage() {
         ) : (
           <motion.div
             key="app"
-            className="relative mx-auto grid size-full max-w-[1344px] grid-cols-2 grid-rows-[112px_minmax(0,1fr)] gap-y-3 md:grid-cols-[56px_minmax(0,1200px)_56px] md:grid-rows-1 md:gap-x-4 md:gap-y-0"
+            className="relative mx-auto grid size-full max-w-[1344px] grid-cols-2 grid-rows-[180px_minmax(0,1fr)] gap-y-3 md:grid-cols-[56px_minmax(0,1200px)_56px] md:grid-rows-1 md:gap-x-4 md:gap-y-0"
             initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
