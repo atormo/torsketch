@@ -1,861 +1,564 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+} from "motion/react";
+import { Download, InfoBox } from "pixelarticons/react";
 
-const CANVAS_BG = "#f5f3ee";
-const BRUSH_STEP = 10;
+const SCREEN_COLOR = "#d2d0c4";
+const LINE_COLOR = "#6d6e68";
+const LINE_WIDTH = 2.2;
+const TURN_TO_PIXELS = 0.72;
 
-const PALETTE = [
-  "#000000", "#ffffff", "#808080",
-  "#e63946", "#457b9d", "#f4d35e",
-  "#f4a261", "#4caf50", "#9c27b0",
-  "#ff6b9d", "#2a9d8f", "#a0522d",
-];
+type Axis = "horizontal" | "vertical";
 
-type Tool = "pen" | "eraser";
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
-const INTERFACE_FONT = { fontFamily: "var(--font-interface)" } as const;
-
-// Bresenham integer line — visits every grid cell between two points
-function bresenham(
-  x0: number, y0: number, x1: number, y1: number,
-  cb: (x: number, y: number) => void
-) {
-  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
-  while (true) {
-    cb(x0, y0);
-    if (x0 === x1 && y0 === y1) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) { err -= dy; x0 += sx; }
-    if (e2 < dx)  { err += dx; y0 += sy; }
-  }
+interface EtchKnobProps {
+  axis: Axis;
+  rotation: number;
+  onTurn: (delta: number) => void;
 }
 
-// ─── Dial ──────────────────────────────────────────────────────────────────────
+function EtchKnob({ axis, rotation, onTurn }: EtchKnobProps) {
+  const knobRef = useRef<HTMLButtonElement>(null);
+  const gesture = useRef<{
+    pointerId: number;
+    centerX: number;
+    centerY: number;
+    lastAngle: number;
+  } | null>(null);
 
-interface DialProps {
-  label: string;
-  value: number;
-  unit: string;
-  min: number;
-  max: number;
-  onRotate: (delta: number) => void;
-  textLeft?: boolean;
-}
-
-// Arc geometry constants
-const ARC_R = 50;
-const ARC_C = 2 * Math.PI * ARC_R;         // ≈ 314.16
-const ARC_SWEEP_DEG = 270;
-const ARC_TRACK = (ARC_SWEEP_DEG / 360) * ARC_C; // ≈ 235.62
-const ARC_GAP   = ARC_C - ARC_TRACK;              // ≈ 78.54
-
-function Dial({ label, value, unit, min, max, onRotate, textLeft }: DialProps) {
-  const knobRef = useRef<HTMLDivElement>(null);
-  const center = useRef<{ x: number; y: number } | null>(null);
-  const lastAngle = useRef<number | null>(null);
-  const dragging = useRef(false);
-
-  const getKnobAngle = (cx: number, cy: number) => {
-    if (!center.current) return 0;
-    return Math.atan2(cy - center.current.y, cx - center.current.x) * (180 / Math.PI);
+  const getAngle = (clientX: number, clientY: number) => {
+    const current = gesture.current;
+    if (!current) return 0;
+    return Math.atan2(clientY - current.centerY, clientX - current.centerX) * (180 / Math.PI);
   };
 
-  const pointerDown = (cx: number, cy: number) => {
-    const rect = knobRef.current!.getBoundingClientRect();
-    center.current = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    lastAngle.current = getKnobAngle(cx, cy);
-    dragging.current = true;
+  const startTurning = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    gesture.current = {
+      pointerId: event.pointerId,
+      centerX,
+      centerY,
+      lastAngle: Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI),
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current || lastAngle.current === null) return;
-      const a = getKnobAngle(e.clientX, e.clientY);
-      let d = a - lastAngle.current;
-      if (d > 180) d -= 360;
-      if (d < -180) d += 360;
-      lastAngle.current = a;
-      onRotate(d);
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (!dragging.current || lastAngle.current === null) return;
-      const t = e.touches[0];
-      const a = getKnobAngle(t.clientX, t.clientY);
-      let d = a - lastAngle.current;
-      if (d > 180) d -= 360;
-      if (d < -180) d += 360;
-      lastAngle.current = a;
-      onRotate(d);
-    };
-    const onUp = () => { dragging.current = false; };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onUp);
-    };
-  }, [onRotate]);
+  const turn = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const current = gesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
 
-  // Derive rotation and arc fill from value
-  const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
-  const knobAngle = -135 + t * 270;
-  const activeLen = t * ARC_TRACK;
+    const angle = getAngle(event.clientX, event.clientY);
+    let delta = angle - current.lastAngle;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    current.lastAngle = angle;
+    onTurn(delta);
+  };
 
-  const textBlock = (
-    <div className="leading-tight" style={{ minWidth: 56, textAlign: textLeft ? "right" : "left" }}>
-      <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 10, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>
-        {label}
-      </span>
-      <span style={{ ...INTERFACE_FONT, fontSize: 17, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>
-        {value}{unit}
-      </span>
-    </div>
-  );
+  const stopTurning = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (gesture.current?.pointerId !== event.pointerId) return;
+    gesture.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const useKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
+    let delta = 0;
+
+    if (axis === "horizontal") {
+      if (event.key === "ArrowLeft") delta = -18;
+      if (event.key === "ArrowRight") delta = 18;
+    } else {
+      if (event.key === "ArrowUp") delta = -18;
+      if (event.key === "ArrowDown") delta = 18;
+    }
+
+    if (delta === 0) return;
+    event.preventDefault();
+    onTurn(delta);
+  };
+
+  const label = axis === "horizontal"
+    ? "Horizontal drawing dial. Turn it or use the left and right arrow keys."
+    : "Vertical drawing dial. Turn it or use the up and down arrow keys.";
 
   return (
-    <div className="flex flex-row items-center gap-3 flex-shrink-0">
-      {textLeft && textBlock}
-      {/* Wrapper so SVG arc can be positioned outside the rotating knob */}
-      <div style={{ position: "relative", width: 92, height: 92, flexShrink: 0 }}>
-        {/* Arc SVG — static, does not rotate */}
-        <svg
-          width={108} height={108}
-          style={{ position: "absolute", top: -8, left: -8, pointerEvents: "none" }}
-        >
-          {/* Grey track: full 270° sweep */}
-          <circle
-            cx={54} cy={54} r={ARC_R}
-            fill="none"
-            stroke="rgba(255,255,255,0.15)"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeDasharray={`${ARC_TRACK} ${ARC_GAP}`}
-            transform="rotate(135, 54, 54)"
-          />
-          {/* White active arc: 0 → current value */}
-          {activeLen > 1 && (
-            <circle
-              cx={54} cy={54} r={ARC_R}
-              fill="none"
-              stroke="rgba(255,255,255,0.88)"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeDasharray={`${activeLen} ${ARC_C - activeLen}`}
-              transform="rotate(135, 54, 54)"
-            />
-          )}
-        </svg>
-        {/* Knob — rotates with value */}
-        <div
-          ref={knobRef}
-          onMouseDown={(e) => { e.preventDefault(); pointerDown(e.clientX, e.clientY); }}
-          onTouchStart={(e) => { const t = e.touches[0]; pointerDown(t.clientX, t.clientY); }}
-          className="rounded-full cursor-grab active:cursor-grabbing relative"
-          style={{
-            width: 92, height: 92,
-            background: "radial-gradient(circle at 35% 30%, #5a5a5a 0%, #1a1a1a 70%)",
-            boxShadow: "0 6px 22px rgba(0,0,0,0.85), 0 0 0 4px rgba(255,255,255,0.07), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -2px 0 rgba(0,0,0,0.5)",
-            transform: `rotate(${knobAngle}deg)`,
-            touchAction: "none",
-          }}
-        >
-          <div
-            className="absolute top-2.5 left-1/2 -translate-x-1/2 rounded-full"
-            style={{ width: 6, height: 22, background: "linear-gradient(to bottom, #fff 0%, rgba(255,255,255,0.35) 100%)" }}
-          />
-        </div>
-      </div>
-      {!textLeft && textBlock}
-    </div>
+    <button
+      ref={knobRef}
+      type="button"
+      data-no-shake
+      aria-label={label}
+      title={axis === "horizontal" ? "Draw left and right" : "Draw up and down"}
+      className="etch-knob relative shrink-0 rounded-full"
+      style={{ transform: `rotate(${rotation}deg)` }}
+      onPointerDown={startTurning}
+      onPointerMove={turn}
+      onPointerUp={stopTurning}
+      onPointerCancel={stopTurning}
+      onKeyDown={useKeyboard}
+    >
+      <span className="etch-knob-cap pointer-events-none absolute inset-[13%] rounded-full" />
+      <span className="etch-knob-mark pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2" />
+    </button>
   );
 }
 
-// ─── Page ──────────────────────────────────────────────────────────────────────
-
 export default function TormiSketchPage() {
-  const [tool, setTool] = useState<Tool>("pen");
-  const [color, setColor] = useState("#000000");
-  const [brushSize, setBrushSize] = useState(6);
-  const [pixelMode, setPixelMode] = useState(false);
-  const [opacity, setOpacity] = useState(100);
-  const [noBackground, setNoBackground] = useState(false);
-  const [clearPending, setClearPending] = useState(false);
   const [booted, setBooted] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setBooted(true), 1400);
-    return () => clearTimeout(t);
-  }, []);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [leftRotation, setLeftRotation] = useState(0);
+  const [rightRotation, setRightRotation] = useState(0);
+  const [eraseStatus, setEraseStatus] = useState("");
+  const reduceMotion = useReducedMotion();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pendingRef = useRef<HTMLCanvasElement>(null); // current in-progress stroke
-  const containerRef = useRef<HTMLDivElement>(null);
-  const staticRef = useRef<HTMLCanvasElement>(null);
-  const isDrawing = useRef(false);
-  const lastPos = useRef<{ x: number; y: number } | null>(null);
-  const lastGridPos = useRef<{ x: number; y: number } | null>(null);
-  const brushAccum = useRef(0);
-  const opacityAccum = useRef(0);
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cssSize = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const screenRef = useRef<HTMLDivElement>(null);
+  const cursorRef = useRef<{ x: number; y: number } | null>(null);
+  const screenSize = useRef({ width: 0, height: 0 });
+  const eraseProgress = useRef(0);
+  const hasDrawing = useRef(false);
+  const shakeGesture = useRef<{
+    pointerId: number;
+    startY: number;
+    lastY: number;
+    lastTime: number;
+    direction: number;
+  } | null>(null);
 
-  // Init both canvases — runs when booted turns true (container becomes visible)
+  const shellOffset = useMotionValue(0);
+  const shellY = useSpring(shellOffset, { stiffness: 760, damping: 52, mass: 0.35 });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setBooted(true), reduceMotion ? 0 : 1400);
+    return () => clearTimeout(timer);
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (!infoOpen) return;
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setInfoOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [infoOpen]);
+
   useEffect(() => {
     if (!booted) return;
     const canvas = canvasRef.current;
-    const pending = pendingRef.current;
-    const container = containerRef.current;
-    if (!canvas || !pending || !container) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const W = container.offsetWidth;
-    const H = container.offsetHeight;
-    cssSize.current = { w: W, h: H };
-    canvas.width = W * dpr; canvas.height = H * dpr;
-    const ctx = canvas.getContext("2d");
-    if (ctx) { ctx.scale(dpr, dpr); ctx.fillStyle = CANVAS_BG; ctx.fillRect(0, 0, W, H); }
-    pending.width = W * dpr; pending.height = H * dpr;
-    const pCtx = pending.getContext("2d");
-    if (pCtx) pCtx.scale(dpr, dpr);
+    const screen = screenRef.current;
+    if (!canvas || !screen) return;
+
+    const resizeCanvas = () => {
+      const width = Math.max(1, Math.round(screen.clientWidth));
+      const height = Math.max(1, Math.round(screen.clientHeight));
+      const previous = screenSize.current;
+      if (width === previous.width && height === previous.height) return;
+
+      const snapshot = document.createElement("canvas");
+      if (previous.width > 0 && previous.height > 0) {
+        snapshot.width = canvas.width;
+        snapshot.height = canvas.height;
+        snapshot.getContext("2d")?.drawImage(canvas, 0, 0);
+      }
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      const context = canvas.getContext("2d");
+      if (!context) return;
+
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.fillStyle = SCREEN_COLOR;
+      context.fillRect(0, 0, width, height);
+      if (snapshot.width > 0 && snapshot.height > 0) {
+        context.drawImage(snapshot, 0, 0, snapshot.width, snapshot.height, 0, 0, width, height);
+      }
+
+      const cursor = cursorRef.current;
+      cursorRef.current = cursor && previous.width > 0 && previous.height > 0
+        ? {
+            x: clamp((cursor.x / previous.width) * width, 2, width - 2),
+            y: clamp((cursor.y / previous.height) * height, 2, height - 2),
+          }
+        : { x: width / 2, y: height / 2 };
+      screenSize.current = { width, height };
+    };
+
+    const observer = new ResizeObserver(resizeCanvas);
+    observer.observe(screen);
+    resizeCanvas();
+    return () => observer.disconnect();
   }, [booted]);
 
-  // Analog TV static noise — throttled to 24fps (authentic TV look, avoids competing with entry animation)
-  useEffect(() => {
-    const canvas = staticRef.current;
-    if (!canvas) return;
-    const W = 180, H = 100;
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    let raf: number;
-    let lastTime = 0;
-    const INTERVAL = 1000 / 24;
-    const drawNoise = (time: number) => {
-      raf = requestAnimationFrame(drawNoise);
-      if (time - lastTime < INTERVAL) return;
-      lastTime = time;
-      const imgData = ctx.createImageData(W, H);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const v = Math.random() > 0.965 ? Math.round(Math.random() * 170 + 85) : 0;
-        d[i] = d[i + 1] = d[i + 2] = v;
-        d[i + 3] = v > 0 ? 190 : 0;
-      }
-      ctx.putImageData(imgData, 0, 0);
-    };
-    raf = requestAnimationFrame(drawNoise);
-    return () => cancelAnimationFrame(raf);
+  const moveStylus = useCallback((axis: Axis, deltaDegrees: number) => {
+    if (!Number.isFinite(deltaDegrees) || Math.abs(deltaDegrees) < 0.01) return;
+
+    if (axis === "horizontal") {
+      setLeftRotation((rotation) => rotation + deltaDegrees);
+    } else {
+      setRightRotation((rotation) => rotation + deltaDegrees);
+    }
+
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    const { width, height } = screenSize.current;
+    if (!canvas || !context || width === 0 || height === 0) return;
+
+    const current = cursorRef.current ?? { x: width / 2, y: height / 2 };
+    const distance = deltaDegrees * TURN_TO_PIXELS;
+    const next = axis === "horizontal"
+      ? { x: clamp(current.x + distance, 2, width - 2), y: current.y }
+      : { x: current.x, y: clamp(current.y + distance, 2, height - 2) };
+
+    if (next.x === current.x && next.y === current.y) return;
+
+    context.beginPath();
+    context.moveTo(current.x, current.y);
+    context.lineTo(next.x, next.y);
+    context.strokeStyle = LINE_COLOR;
+    context.lineWidth = LINE_WIDTH;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.stroke();
+    cursorRef.current = next;
+    hasDrawing.current = true;
+    eraseProgress.current = 0;
+    setEraseStatus("");
   }, []);
 
-  const getPos = (e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    if ("touches" in e) {
-      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    }
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const turnHorizontal = useCallback(
+    (delta: number) => moveStylus("horizontal", delta),
+    [moveStylus],
+  );
+  const turnVertical = useCallback(
+    (delta: number) => moveStylus("vertical", delta),
+    [moveStylus],
+  );
+
+  const fadeDrawing = useCallback((amount: number) => {
+    const context = canvasRef.current?.getContext("2d");
+    const { width, height } = screenSize.current;
+    if (!context || width === 0 || height === 0) return;
+
+    context.save();
+    context.globalAlpha = amount;
+    context.fillStyle = SCREEN_COLOR;
+    context.fillRect(0, 0, width, height);
+    context.restore();
+  }, []);
+
+  const clearDrawing = useCallback(() => {
+    const context = canvasRef.current?.getContext("2d");
+    const { width, height } = screenSize.current;
+    if (!context || width === 0 || height === 0) return;
+    context.fillStyle = SCREEN_COLOR;
+    context.fillRect(0, 0, width, height);
+    hasDrawing.current = false;
+    eraseProgress.current = 0;
+    setEraseStatus("Drawing erased");
+  }, []);
+
+  const startShaking = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-no-shake]")) return;
+
+    shakeGesture.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      lastTime: performance.now(),
+      direction: 0,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
   };
 
-  // ── startDraw: draw initial point / pixel ──────────────────────────────────
-  const startDraw = useCallback((e: MouseEvent | TouchEvent) => {
-    const canvas = canvasRef.current;
-    const pending = pendingRef.current;
-    if (!canvas || !pending) return;
-    e.preventDefault();
-    isDrawing.current = true;
-    const pos = getPos(e, canvas);
-    lastPos.current = pos;
+  const shake = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = shakeGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
 
-    if (tool === "eraser") {
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.fillStyle = CANVAS_BG;
-      if (pixelMode) {
-        const gx = Math.floor(pos.x / brushSize);
-        const gy = Math.floor(pos.y / brushSize);
-        ctx.fillRect(gx * brushSize, gy * brushSize, brushSize, brushSize);
-        lastGridPos.current = { x: gx, y: gy };
-      } else {
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, brushSize * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    } else {
-      const pCtx = pending.getContext("2d");
-      if (!pCtx) return;
-      pCtx.clearRect(0, 0, cssSize.current.w, cssSize.current.h);
-      pCtx.fillStyle = color;
-      if (pixelMode) {
-        const gx = Math.floor(pos.x / brushSize);
-        const gy = Math.floor(pos.y / brushSize);
-        pCtx.fillRect(gx * brushSize, gy * brushSize, brushSize, brushSize);
-        lastGridPos.current = { x: gx, y: gy };
-      } else {
-        pCtx.beginPath();
-        pCtx.arc(pos.x, pos.y, brushSize / 2, 0, Math.PI * 2);
-        pCtx.fill();
-      }
-    }
-  }, [tool, color, brushSize, pixelMode]);
+    shellOffset.set(clamp((event.clientY - gesture.startY) * 0.16, -10, 10));
+    if (!hasDrawing.current) return;
 
-  // ── draw: extend stroke to current position ────────────────────────────────
-  const draw = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!isDrawing.current) return;
-    const canvas = canvasRef.current;
-    const pending = pendingRef.current;
-    if (!canvas || !pending) return;
-    e.preventDefault();
-    const pos = getPos(e, canvas);
+    const now = performance.now();
+    const deltaY = event.clientY - gesture.lastY;
+    const elapsed = Math.max(1, now - gesture.lastTime);
+    if (Math.abs(deltaY) < 4) return;
 
-    if (tool === "eraser") {
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.fillStyle = CANVAS_BG;
-      if (pixelMode) {
-        const gx1 = Math.floor(pos.x / brushSize);
-        const gy1 = Math.floor(pos.y / brushSize);
-        const gx0 = lastGridPos.current?.x ?? Math.floor(lastPos.current!.x / brushSize);
-        const gy0 = lastGridPos.current?.y ?? Math.floor(lastPos.current!.y / brushSize);
-        bresenham(gx0, gy0, gx1, gy1, (gx, gy) => {
-          ctx.fillRect(gx * brushSize, gy * brushSize, brushSize, brushSize);
-        });
-        lastGridPos.current = { x: gx1, y: gy1 };
+    const direction = Math.sign(deltaY);
+    const speed = Math.abs(deltaY) / elapsed;
+    if (gesture.direction !== 0 && direction !== gesture.direction && speed > 0.22) {
+      const increment = clamp(0.08 + speed * 0.035, 0.09, 0.16);
+      eraseProgress.current = clamp(eraseProgress.current + increment, 0, 1);
+      fadeDrawing(clamp(0.12 + speed * 0.035, 0.13, 0.24));
+
+      if (eraseProgress.current >= 0.96) {
+        clearDrawing();
       } else {
-        ctx.beginPath();
-        ctx.moveTo(lastPos.current!.x, lastPos.current!.y);
-        ctx.lineTo(pos.x, pos.y);
-        ctx.strokeStyle = CANVAS_BG;
-        ctx.lineWidth = brushSize * 3;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-      }
-    } else {
-      const pCtx = pending.getContext("2d");
-      if (!pCtx) return;
-      if (pixelMode) {
-        const gx1 = Math.floor(pos.x / brushSize);
-        const gy1 = Math.floor(pos.y / brushSize);
-        const gx0 = lastGridPos.current?.x ?? Math.floor(lastPos.current!.x / brushSize);
-        const gy0 = lastGridPos.current?.y ?? Math.floor(lastPos.current!.y / brushSize);
-        pCtx.fillStyle = color;
-        bresenham(gx0, gy0, gx1, gy1, (gx, gy) => {
-          pCtx.fillRect(gx * brushSize, gy * brushSize, brushSize, brushSize);
-        });
-        lastGridPos.current = { x: gx1, y: gy1 };
-      } else {
-        pCtx.beginPath();
-        pCtx.moveTo(lastPos.current!.x, lastPos.current!.y);
-        pCtx.lineTo(pos.x, pos.y);
-        pCtx.strokeStyle = color;
-        pCtx.lineWidth = brushSize;
-        pCtx.lineCap = "round";
-        pCtx.lineJoin = "round";
-        pCtx.stroke();
+        setEraseStatus(`Erasing drawing: ${Math.round(eraseProgress.current * 100)}%`);
       }
     }
 
-    lastPos.current = pos;
-  }, [tool, color, brushSize, pixelMode]);
+    gesture.direction = direction;
+    gesture.lastY = event.clientY;
+    gesture.lastTime = now;
+  };
 
-  // ── endDraw: flatten pending canvas to main at chosen opacity ──────────────
-  const endDraw = useCallback(() => {
-    if (!isDrawing.current) return;
-    isDrawing.current = false;
-    lastPos.current = null;
-    lastGridPos.current = null;
-
-    const canvas = canvasRef.current;
-    const pending = pendingRef.current;
-    if (!canvas || !pending || tool === "eraser") return;
-
-    const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.globalAlpha = opacity / 100;
-      ctx.drawImage(pending, 0, 0, cssSize.current.w, cssSize.current.h);
-      ctx.globalAlpha = 1;
+  const stopShaking = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (shakeGesture.current?.pointerId !== event.pointerId) return;
+    shakeGesture.current = null;
+    shellOffset.set(0);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const pCtx = pending.getContext("2d");
-    if (pCtx) pCtx.clearRect(0, 0, cssSize.current.w, cssSize.current.h);
-  }, [tool, opacity]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.addEventListener("mousedown", startDraw);
-    canvas.addEventListener("mousemove", draw);
-    canvas.addEventListener("mouseup", endDraw);
-    canvas.addEventListener("mouseleave", endDraw);
-    canvas.addEventListener("touchstart", startDraw, { passive: false });
-    canvas.addEventListener("touchmove", draw, { passive: false });
-    canvas.addEventListener("touchend", endDraw);
-    return () => {
-      canvas.removeEventListener("mousedown", startDraw);
-      canvas.removeEventListener("mousemove", draw);
-      canvas.removeEventListener("mouseup", endDraw);
-      canvas.removeEventListener("mouseleave", endDraw);
-      canvas.removeEventListener("touchstart", startDraw);
-      canvas.removeEventListener("touchmove", draw);
-      canvas.removeEventListener("touchend", endDraw);
-    };
-  }, [startDraw, draw, endDraw, booted]);
-
-  const clearCanvas = useCallback(() => {
-    const canvas = canvasRef.current;
-    const pending = pendingRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const { w, h } = cssSize.current;
-    if (ctx) { ctx.fillStyle = CANVAS_BG; ctx.fillRect(0, 0, w, h); }
-    if (pending) {
-      const pCtx = pending.getContext("2d");
-      if (pCtx) pCtx.clearRect(0, 0, w, h);
-    }
-  }, []);
-
-  const handleClearClick = useCallback(() => {
-    if (clearPending) {
-      if (clearTimer.current) clearTimeout(clearTimer.current);
-      setClearPending(false);
-      clearCanvas();
-    } else {
-      setClearPending(true);
-      clearTimer.current = setTimeout(() => setClearPending(false), 2200);
-    }
-  }, [clearPending, clearCanvas]);
+  };
 
   const downloadDrawing = useCallback(() => {
     const canvas = canvasRef.current;
-    const pending = pendingRef.current;
     if (!canvas) return;
     const link = document.createElement("a");
     link.download = "tormisketch.png";
-    try {
-      const tmp = document.createElement("canvas");
-      tmp.width = canvas.width; tmp.height = canvas.height;
-      const tCtx = tmp.getContext("2d");
-      if (tCtx) {
-        tCtx.drawImage(canvas, 0, 0);
-        if (pending) { tCtx.globalAlpha = opacity / 100; tCtx.drawImage(pending, 0, 0); tCtx.globalAlpha = 1; }
-        if (noBackground) {
-          // CANVAS_BG = #f5f3ee → rgb(245, 243, 238) — not in palette, safe to remove
-          const imgData = tCtx.getImageData(0, 0, tmp.width, tmp.height);
-          const d = imgData.data;
-          for (let i = 0; i < d.length; i += 4) {
-            if (d[i] === 245 && d[i + 1] === 243 && d[i + 2] === 238) d[i + 3] = 0;
-          }
-          tCtx.putImageData(imgData, 0, 0);
-        }
-      }
-      link.href = tmp.toDataURL("image/png");
-    } catch {
-      link.href = canvas.toDataURL("image/png");
-    }
+    link.href = canvas.toDataURL("image/png");
     link.click();
-  }, [opacity, noBackground]);
-
-  const handleSizeDial = useCallback((delta: number) => {
-    brushAccum.current += delta;
-    const steps = Math.trunc(brushAccum.current / BRUSH_STEP);
-    if (steps !== 0) {
-      brushAccum.current -= steps * BRUSH_STEP;
-      setBrushSize((prev) => Math.max(1, Math.min(40, prev + steps)));
-    }
   }, []);
-
-  const handleOpacityDial = useCallback((delta: number) => {
-    opacityAccum.current += delta;
-    const steps = Math.trunc(opacityAccum.current / BRUSH_STEP);
-    if (steps !== 0) {
-      opacityAccum.current -= steps * BRUSH_STEP;
-      setOpacity((prev) => Math.max(5, Math.min(100, prev + steps * 5)));
-    }
-  }, []);
-
-
-  const toolBtnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "10px 14px", borderRadius: 12,
-    background: active ? "white" : "rgba(255,255,255,0.1)",
-    color: active ? "black" : "rgba(255,255,255,0.55)",
-    display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-    cursor: "pointer", transition: "background 0.15s, color 0.15s",
-  });
-
-  const mobileTool = (active: boolean): React.CSSProperties => ({
-    padding: "8px 10px", borderRadius: 10,
-    background: active ? "white" : "rgba(255,255,255,0.1)",
-    color: active ? "black" : "rgba(255,255,255,0.55)",
-    display: "flex", alignItems: "center",
-    cursor: "pointer", transition: "background 0.15s, color 0.15s", flexShrink: 0,
-  });
-
-  const miniCtrlBtn: React.CSSProperties = {
-    ...INTERFACE_FONT, width: 28, height: 28, borderRadius: 8,
-    background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.85)",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    fontSize: 17, fontWeight: 700, cursor: "pointer", flexShrink: 0, border: "none",
-  };
 
   return (
-    <>
+    <main
+      className="fixed inset-0 overflow-hidden bg-cover bg-center p-3 md:p-4"
+      style={{
+        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.14) 0 0.7px, transparent 0.8px), url('/tormisketch-hills.png')",
+        backgroundSize: "4px 4px, cover",
+        backgroundPosition: "0 0, center",
+        backgroundRepeat: "repeat, no-repeat",
+      }}
+    >
       <style>{`
-        @keyframes scan-drift {
-          from { transform: translateY(-100%); }
-          to   { transform: translateY(600%); }
-        }
         @keyframes letter-fill {
           from { clip-path: inset(100% 0 0 0); }
-          to   { clip-path: inset(0% 0 0 0); }
+          to { clip-path: inset(0 0 0 0); }
         }
-        .tsk-btn {
-          font-family: var(--font-interface);
-          font-size: 13px;
-          font-weight: 500;
-          padding: 9px 20px 10px;
-          border-radius: 10px;
-          cursor: pointer;
+
+        .etch-action {
           display: inline-flex;
+          width: 56px;
+          height: 56px;
           align-items: center;
-          gap: 6px;
-          transition: opacity 0.15s;
-          border: none;
-          text-decoration: none;
-          white-space: nowrap;
-          line-height: 1;
+          justify-content: center;
+          border: 0;
+          border-radius: 10px;
+          background: #f7f5ed;
+          color: #171717;
+          cursor: pointer;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.34), inset 0 0 0 1px rgba(0,0,0,0.1);
+          transition: transform 150ms ease-out, box-shadow 150ms ease-out;
         }
-        .tsk-btn-white { background: white; color: black; }
+        .etch-action:hover {
+          box-shadow: 0 11px 28px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .etch-action:active { transform: scale(0.96); }
+        .etch-action:focus-visible {
+          outline: 3px solid #fff;
+          outline-offset: 3px;
+        }
+
+        .etch-shell { cursor: grab; touch-action: none; }
+        .etch-shell:active { cursor: grabbing; }
+        [data-no-shake] { cursor: default; }
+
+        .etch-knob {
+          width: clamp(92px, 11vw, 140px);
+          aspect-ratio: 1;
+          border: 0;
+          background: #e5e1d4;
+          cursor: grab;
+          touch-action: none;
+          box-shadow:
+            0 10px 24px rgba(0,0,0,0.62),
+            0 0 0 4px rgba(91,25,22,0.42),
+            inset 0 2px 2px rgba(255,255,255,0.95),
+            inset 0 -5px 8px rgba(88,84,74,0.34);
+        }
+        .etch-knob:active { cursor: grabbing; }
+        .etch-knob:focus-visible {
+          outline: 4px solid rgba(255,255,255,0.92);
+          outline-offset: 6px;
+        }
+        .etch-knob-cap {
+          background: radial-gradient(circle at 38% 32%, #fffdf5 0%, #dedacc 72%, #c1bcad 100%);
+          box-shadow: inset 0 1px 2px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.18);
+        }
+        .etch-knob-mark {
+          width: 8%;
+          height: 22%;
+          min-width: 6px;
+          border-radius: 999px;
+          background: #8e8b81;
+          box-shadow: inset 0 1px 1px rgba(255,255,255,0.5);
+        }
+
         @media (max-width: 767px) {
-          .tsk-btn {
-            font-size: 11px;
-            padding: 6px 13px 7px;
-            gap: 4px;
-          }
+          .etch-action { width: 48px; height: 48px; }
+          .etch-knob { width: clamp(82px, 24vw, 102px); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .boot-letter { animation: none !important; clip-path: none !important; }
+          .etch-action { transition-duration: 0.01ms; }
         }
       `}</style>
 
-      <div
-        className="fixed inset-0 z-[999] overflow-hidden select-none flex items-center justify-center"
-        style={{
-          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.14) 0 0.7px, transparent 0.8px), url('/tormisketch-hills.png')",
-          backgroundSize: "4px 4px, cover",
-          backgroundPosition: "0 0, center",
-          backgroundRepeat: "repeat, no-repeat",
-        }}
-      >
-        <AnimatePresence mode="wait">
-          {!booted && (
-            <motion.div
-              key="boot"
-              className="absolute inset-0 flex flex-col items-center justify-center gap-8"
-              style={{ background: "#000" }}
-              initial={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-            >
-              {/* Letter-by-letter fill */}
-              <div style={{ display: "flex" }}>
-                {"TORMISKETCH".split("").map((letter, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 400,
-                      fontSize: 52,
-                      color: "white",
-                      display: "inline-block",
-                      clipPath: "inset(100% 0 0 0)",
-                      animation: `letter-fill 0.1s ${i * 0.055}s ease-out forwards`,
-                    }}
-                  >
-                    {letter}
-                  </span>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {booted && (
-        <motion.div
-          key="app"
-          className="relative flex flex-col w-full h-full px-3 pt-3 pb-2.5 md:px-[22px] md:pt-4 md:pb-[14px]"
-          style={{
-            maxWidth: "min(96vw, 1200px)", maxHeight: "96vh",
-            background: "linear-gradient(158deg, #e03434 0%, #c21c1c 52%, #d32828 100%)",
-            borderRadius: 30,
-            boxShadow: "0 32px 100px rgba(0,0,0,0.92), 0 0 0 1px rgba(255,160,160,0.09), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -3px 0 rgba(0,0,0,0.3)",
-          }}
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-        >
-          {/* Top bar */}
-          <div className="flex items-center justify-end flex-shrink-0 mb-4 md:mb-5">
-            <div className="flex items-center gap-1.5 md:gap-2">
-              {/* transparent bg — desktop only */}
-              <div className="hidden md:flex items-center gap-1.5">
-                <label
+      <AnimatePresence>
+        {!booted ? (
+          <motion.div
+            key="boot"
+            className="absolute inset-0 flex items-center justify-center bg-black"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.35, ease: "easeOut" }}
+          >
+            <div className="flex" aria-label="TormiSketch">
+              {"TORMISKETCH".split("").map((letter, index) => (
+                <span
+                  key={`${letter}-${index}`}
+                  className="boot-letter inline-block text-white"
                   style={{
-                    display: "flex", alignItems: "center", gap: 5, cursor: "pointer",
-                    ...INTERFACE_FONT, fontSize: 11, fontWeight: 500,
-                    color: noBackground ? "white" : "rgba(255,255,255,0.45)",
-                    userSelect: "none",
+                    fontFamily: "var(--font-display)",
+                    fontSize: "clamp(32px, 7vw, 56px)",
+                    animation: `letter-fill 0.1s ${index * 0.055}s ease-out forwards`,
+                    clipPath: "inset(100% 0 0 0)",
                   }}
+                  aria-hidden="true"
                 >
-                  <input
-                    type="checkbox"
-                    checked={noBackground}
-                    onChange={(e) => setNoBackground(e.target.checked)}
-                    style={{ accentColor: "white", cursor: "pointer", width: 13, height: 13 }}
-                  />
-                  transparent background
-                </label>
-              </div>
-              {/* save */}
-              <button onClick={downloadDrawing} className="tsk-btn tsk-btn-white">
-                save
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/iconarrow.png" alt="" width={13} height={13} style={{ filter: "brightness(0)", transform: "rotate(90deg)" }} />
-              </button>
-            </div>
-          </div>
-
-          {/* Canvas area */}
-          <div className="flex-1 min-h-0 mb-2.5 md:mb-3">
-            <div
-              ref={containerRef}
-              className="relative w-full h-full overflow-hidden"
-              style={{
-                borderRadius: 10, background: CANVAS_BG,
-                boxShadow: "0 0 0 5px #0b0b0b, 0 0 0 9px rgba(0,0,0,0.32)",
-              }}
-            >
-              {/* Main committed canvas */}
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full"
-                style={{ cursor: tool === "eraser" ? "cell" : "crosshair", touchAction: "none" }}
-              />
-
-              {/* Pending stroke canvas — CSS opacity = live opacity preview */}
-              <canvas
-                ref={pendingRef}
-                className="absolute inset-0 w-full h-full pointer-events-none"
-                style={{ opacity: opacity / 100 }}
-              />
-
-              {/* Analog static noise */}
-              <canvas
-                ref={staticRef}
-                className="absolute inset-0 w-full h-full pointer-events-none"
-                style={{ imageRendering: "pixelated", opacity: 0.045, zIndex: 8, mixBlendMode: "screen" }}
-              />
-              <div
-                className="absolute inset-x-0 pointer-events-none"
-                style={{
-                  height: "22%",
-                  background: "linear-gradient(to bottom, transparent 0%, rgba(220,220,220,0.055) 50%, transparent 100%)",
-                  animation: "scan-drift 5s linear infinite", zIndex: 9,
-                }}
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.018) 3px, rgba(0,0,0,0.018) 4px)",
-                  zIndex: 10,
-                }}
-              />
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{
-                  background: "radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0,0,0,0.4) 100%)",
-                  zIndex: 10,
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Controls bar — DESKTOP */}
-          <div className="hidden md:flex items-center flex-shrink-0 gap-6">
-            {/* LEFT: Size dial */}
-            <Dial label="size" value={brushSize} unit="px" min={1} max={40} onRotate={handleSizeDial} />
-
-            {/* CENTER: tools + pixel selector + colors */}
-            <div className="flex-1 flex flex-col items-center gap-3">
-              {/* Row 1: pen / erase / pixel / clear — single row */}
-              <div className="flex items-center gap-2">
-                <button aria-label="Use pen" onClick={() => setTool("pen")} style={toolBtnStyle(tool === "pen")}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icons/iconpen.png" alt="" width={28} height={28} style={{ filter: tool === "pen" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "pen" ? 1 : 0.55 }} />
-                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>pen</span>
-                </button>
-                <button aria-label="Use eraser" onClick={() => setTool("eraser")} style={toolBtnStyle(tool === "eraser")}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icons/iconerase.png" alt="" width={28} height={28} style={{ filter: tool === "eraser" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "eraser" ? 1 : 0.55 }} />
-                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>erase</span>
-                </button>
-                {/* thin divider */}
-                <div style={{ width: 1, height: 36, background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />
-                <button aria-label="Toggle pixel mode" aria-pressed={pixelMode} onClick={() => setPixelMode((v) => !v)} style={toolBtnStyle(pixelMode)}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icons/iconpixel.png" alt="" width={28} height={28} style={{ filter: pixelMode ? "brightness(0)" : "brightness(0) invert(1)", opacity: pixelMode ? 1 : 0.55 }} />
-                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>pixel</span>
-                </button>
-                <button
-                  aria-label={clearPending ? "Confirm clear drawing" : "Clear drawing"}
-                  onClick={handleClearClick}
-                  style={{
-                    ...toolBtnStyle(false),
-                    background: clearPending ? "rgba(255,210,0,0.95)" : "rgba(255,255,255,0.1)",
-                    color: clearPending ? "#000" : "rgba(255,255,255,0.55)",
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/icons/iconclear.png" alt="" width={28} height={28} style={{ filter: clearPending ? "brightness(0)" : "brightness(0) invert(1)", opacity: clearPending ? 1 : 0.55 }} />
-                  <span style={{ ...INTERFACE_FONT, fontSize: 9, fontWeight: 600 }}>{clearPending ? "sure?" : "clear"}</span>
-                </button>
-              </div>
-
-              {/* Row 2: color palette — single line */}
-              <div className="flex items-center gap-1.5">
-                {PALETTE.map((c) => (
-                  <button
-                    key={c}
-                    aria-label={`Use ${c} color`}
-                    aria-pressed={color === c && tool !== "eraser"}
-                    onClick={() => { setColor(c); if (tool === "eraser") setTool("pen"); }}
-                    className="rounded-full flex-shrink-0 transition-transform hover:scale-110"
-                    style={{
-                      width: 22, height: 22,
-                      backgroundColor: c,
-                      outline: color === c && tool !== "eraser"
-                        ? "2.5px solid #fff"
-                        : "none",
-                      outlineOffset: "2px",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* RIGHT: Opacity dial */}
-            <Dial label="opac" value={opacity} unit="%" min={5} max={100} onRotate={handleOpacityDial} textLeft />
-          </div>
-
-          {/* Controls bar — MOBILE */}
-          <div className="flex md:hidden flex-col flex-shrink-0 gap-2">
-            {/* Row 1: tools */}
-            <div className="flex items-center justify-center gap-1.5">
-              <button aria-label="Use pen" onClick={() => setTool("pen")} style={mobileTool(tool === "pen")}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/iconpen.png" alt="" width={22} height={22} style={{ filter: tool === "pen" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "pen" ? 1 : 0.55 }} />
-              </button>
-              <button aria-label="Use eraser" onClick={() => setTool("eraser")} style={mobileTool(tool === "eraser")}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/iconerase.png" alt="" width={22} height={22} style={{ filter: tool === "eraser" ? "brightness(0)" : "brightness(0) invert(1)", opacity: tool === "eraser" ? 1 : 0.55 }} />
-              </button>
-              <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.15)", flexShrink: 0 }} />
-              <button aria-label="Toggle pixel mode" aria-pressed={pixelMode} onClick={() => setPixelMode((v) => !v)} style={mobileTool(pixelMode)}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/iconpixel.png" alt="" width={22} height={22} style={{ filter: pixelMode ? "brightness(0)" : "brightness(0) invert(1)", opacity: pixelMode ? 1 : 0.55 }} />
-              </button>
-              <button
-                aria-label={clearPending ? "Confirm clear drawing" : "Clear drawing"}
-                onClick={handleClearClick}
-                style={{
-                  ...mobileTool(false),
-                  background: clearPending ? "rgba(255,210,0,0.95)" : "rgba(255,255,255,0.1)",
-                  color: clearPending ? "#000" : "rgba(255,255,255,0.55)",
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/icons/iconclear.png" alt="" width={22} height={22} style={{ filter: clearPending ? "brightness(0)" : "brightness(0) invert(1)", opacity: clearPending ? 1 : 0.55 }} />
-              </button>
-            </div>
-
-            {/* Row 2: color palette */}
-            <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  aria-label={`Use ${c} color`}
-                  aria-pressed={color === c && tool !== "eraser"}
-                  onClick={() => { setColor(c); if (tool === "eraser") setTool("pen"); }}
-                  className="rounded-full flex-shrink-0"
-                  style={{
-                    width: 24, height: 24,
-                    backgroundColor: c,
-                    outline: color === c && tool !== "eraser" ? "2.5px solid #fff" : "none",
-                    outlineOffset: "2px",
-                  }}
-                />
+                  {letter}
+                </span>
               ))}
             </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="app"
+            className="relative mx-auto flex size-full max-w-[1200px] flex-col gap-3"
+            initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
+          >
+            <div className="relative z-20 flex shrink-0 justify-end gap-2">
+              <button
+                type="button"
+                className="etch-action"
+                aria-label="Download drawing"
+                title="Download drawing"
+                onClick={downloadDrawing}
+              >
+                <Download width={30} height={30} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="etch-action"
+                aria-label="How to use TormiSketch"
+                aria-expanded={infoOpen}
+                aria-controls="tormisketch-info"
+                title="How to use TormiSketch"
+                onClick={() => setInfoOpen((open) => !open)}
+              >
+                <InfoBox width={30} height={30} aria-hidden="true" />
+              </button>
 
-            {/* Row 3: size + opacity mini controls */}
-            <div className="flex items-center justify-center gap-6">
-              {/* Size */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button style={miniCtrlBtn} onClick={() => setBrushSize((s) => Math.max(1, s - 1))}>−</button>
-                <div style={{ textAlign: "center", minWidth: 40 }}>
-                  <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>size</span>
-                  <span style={{ ...INTERFACE_FONT, fontSize: 15, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>{brushSize}px</span>
-                </div>
-                <button style={miniCtrlBtn} onClick={() => setBrushSize((s) => Math.min(40, s + 1))}>+</button>
-              </div>
-              {/* Opacity */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button style={miniCtrlBtn} onClick={() => setOpacity((o) => Math.max(5, o - 5))}>−</button>
-                <div style={{ textAlign: "center", minWidth: 40 }}>
-                  <span style={{ ...INTERFACE_FONT, display: "block", fontSize: 8, fontWeight: 500, textTransform: "uppercase" as const, color: "rgba(255,255,255,0.38)" }}>opac</span>
-                  <span style={{ ...INTERFACE_FONT, fontSize: 15, fontWeight: 700, color: "white", fontVariantNumeric: "tabular-nums" }}>{opacity}%</span>
-                </div>
-                <button style={miniCtrlBtn} onClick={() => setOpacity((o) => Math.min(100, o + 5))}>+</button>
-              </div>
+              <AnimatePresence initial={false}>
+                {infoOpen && (
+                  <motion.aside
+                    id="tormisketch-info"
+                    className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl"
+                    initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.15, ease: "easeOut" }}
+                    aria-label="How to use TormiSketch"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-4">
+                      <h1 className="text-balance text-lg font-semibold">Draw like a real TeleSketch</h1>
+                      <button
+                        type="button"
+                        className="min-h-10 shrink-0 px-2 text-sm font-medium underline underline-offset-4"
+                        onClick={() => setInfoOpen(false)}
+                      >
+                        close
+                      </button>
+                    </div>
+                    <ol className="list-decimal space-y-2 pl-5 text-pretty text-sm leading-6">
+                      <li>Turn the left dial to draw left and right.</li>
+                      <li>Turn the right dial to draw up and down.</li>
+                      <li>Grab any red part and shake it quickly up and down to erase.</li>
+                    </ol>
+                  </motion.aside>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
 
-          {/* TORMISKETCH nameplate */}
-          <div className="flex items-center gap-3 flex-shrink-0 mt-2.5 md:mt-3">
-            <div
-              className="rounded-full flex-shrink-0"
+            <motion.div
+              className="etch-shell relative flex min-h-0 flex-1 flex-col rounded-[30px] px-3 pb-4 pt-3 md:px-6 md:pb-5 md:pt-5"
               style={{
-                width: 34, height: 34,
-                background: "radial-gradient(circle at 35% 30%, #383838 0%, #0a0a0a 72%)",
-                boxShadow: "0 3px 12px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.1)",
+                y: reduceMotion ? shellOffset : shellY,
+                background: "linear-gradient(158deg, #e43736 0%, #c61d1d 54%, #d52a29 100%)",
+                boxShadow: "0 28px 90px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -4px 0 rgba(0,0,0,0.24)",
               }}
-            />
-            <div
-              className="flex-1 flex items-center justify-center rounded"
-              style={{
-                padding: "10px 0 4px", background: "rgba(0,0,0,0.33)",
-                boxShadow: "inset 0 1px 0 rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.055)",
-              }}
+              onPointerDown={startShaking}
+              onPointerMove={shake}
+              onPointerUp={stopShaking}
+              onPointerCancel={stopShaking}
             >
-              <span style={{ fontFamily: "var(--font-display)", fontWeight: 400, fontSize: "clamp(14px, 2.1vw, 25px)", color: "rgba(255,255,255,0.86)", textShadow: "0 1px 3px rgba(0,0,0,0.55)", textWrap: "balance" }}>
-                TORMISKETCH
-              </span>
-            </div>
-            <div
-              className="rounded-full flex-shrink-0"
-              style={{
-                width: 34, height: 34,
-                background: "radial-gradient(circle at 35% 30%, #383838 0%, #0a0a0a 72%)",
-                boxShadow: "0 3px 12px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.1)",
-              }}
-            />
-          </div>
-        </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </>
+              <div
+                ref={screenRef}
+                data-no-shake
+                className="relative min-h-0 flex-1 overflow-hidden rounded-[12px]"
+                style={{
+                  background: SCREEN_COLOR,
+                  boxShadow: "0 0 0 5px #171717, 0 0 0 9px rgba(0,0,0,0.3), inset 0 0 42px rgba(70,70,64,0.22)",
+                }}
+              >
+                <canvas
+                  ref={canvasRef}
+                  className="pointer-events-none absolute inset-0 size-full"
+                  role="img"
+                  aria-label="TormiSketch drawing surface"
+                />
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: "repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,0.018) 3px 4px)",
+                    boxShadow: "inset 0 0 54px rgba(58,58,52,0.28)",
+                  }}
+                />
+              </div>
+
+              <div className="flex shrink-0 items-end justify-between px-1 pt-4 md:px-2 md:pt-5">
+                <EtchKnob axis="horizontal" rotation={leftRotation} onTurn={turnHorizontal} />
+                <EtchKnob axis="vertical" rotation={rightRotation} onTurn={turnVertical} />
+              </div>
+
+              <p className="sr-only" aria-live="polite">{eraseStatus}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </main>
   );
 }

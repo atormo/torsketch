@@ -24,7 +24,7 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "TormiSketch",
-  description: "A playful browser-based drawing canvas by Tormius.",
+  description: "A mechanical two-dial drawing toy for the browser.",
 };
 
 export default function RootLayout({
