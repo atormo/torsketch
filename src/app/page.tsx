@@ -455,12 +455,12 @@ export default function TormiSketchPage() {
         ) : (
           <motion.div
             key="app"
-            className="relative mx-auto flex size-full max-w-[1200px] flex-col gap-3"
+            className="relative mx-auto grid size-full max-w-[1344px] grid-cols-2 grid-rows-[48px_minmax(0,1fr)] gap-y-3 md:grid-cols-[56px_minmax(0,1200px)_56px] md:grid-rows-1 md:gap-x-4 md:gap-y-0"
             initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
           >
-            <div className="relative z-20 flex shrink-0 justify-end gap-2">
+            <div className="z-20 col-start-1 row-start-1 flex items-start justify-start md:items-center">
               <button
                 type="button"
                 className="etch-action"
@@ -470,51 +470,10 @@ export default function TormiSketchPage() {
               >
                 <Download width={30} height={30} aria-hidden="true" />
               </button>
-              <button
-                type="button"
-                className="etch-action"
-                aria-label="How to use TormiSketch"
-                aria-expanded={infoOpen}
-                aria-controls="tormisketch-info"
-                title="How to use TormiSketch"
-                onClick={() => setInfoOpen((open) => !open)}
-              >
-                <InfoBox width={30} height={30} aria-hidden="true" />
-              </button>
-
-              <AnimatePresence initial={false}>
-                {infoOpen && (
-                  <motion.aside
-                    id="tormisketch-info"
-                    className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl"
-                    initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
-                    transition={{ duration: reduceMotion ? 0 : 0.15, ease: "easeOut" }}
-                    aria-label="How to use TormiSketch"
-                  >
-                    <div className="mb-3 flex items-start justify-between gap-4">
-                      <h1 className="text-balance text-lg font-semibold">Draw like a real TeleSketch</h1>
-                      <button
-                        type="button"
-                        className="min-h-10 shrink-0 px-2 text-sm font-medium underline underline-offset-4"
-                        onClick={() => setInfoOpen(false)}
-                      >
-                        close
-                      </button>
-                    </div>
-                    <ol className="list-decimal space-y-2 pl-5 text-pretty text-sm leading-6">
-                      <li>Turn the left dial to draw left and right.</li>
-                      <li>Turn the right dial to draw up and down.</li>
-                      <li>Grab any red part and shake it quickly up and down to erase.</li>
-                    </ol>
-                  </motion.aside>
-                )}
-              </AnimatePresence>
             </div>
 
             <motion.div
-              className="etch-shell relative flex min-h-0 flex-1 flex-col rounded-[30px] px-3 pb-4 pt-3 md:px-6 md:pb-5 md:pt-5"
+              className="etch-shell relative col-span-2 row-start-2 flex min-h-0 flex-col rounded-[30px] px-3 pb-4 pt-3 md:col-span-1 md:col-start-2 md:row-start-1 md:px-6 md:pb-5 md:pt-5"
               style={{
                 y: reduceMotion ? shellOffset : shellY,
                 background: "linear-gradient(158deg, #e43736 0%, #c61d1d 54%, #d52a29 100%)",
@@ -556,6 +515,50 @@ export default function TormiSketchPage() {
 
               <p className="sr-only" aria-live="polite">{eraseStatus}</p>
             </motion.div>
+
+            <div className="relative z-20 col-start-2 row-start-1 flex items-start justify-end md:col-start-3 md:items-center">
+              <button
+                type="button"
+                className="etch-action"
+                aria-label="How to use TormiSketch"
+                aria-expanded={infoOpen}
+                aria-controls="tormisketch-info"
+                title="How to use TormiSketch"
+                onClick={() => setInfoOpen((open) => !open)}
+              >
+                <InfoBox width={30} height={30} aria-hidden="true" />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {infoOpen && (
+                  <motion.aside
+                    id="tormisketch-info"
+                    className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl md:right-[calc(100%+12px)] md:top-[calc(50%_-_105px)]"
+                    initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.15, ease: "easeOut" }}
+                    aria-label="How to use TormiSketch"
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-4">
+                      <h1 className="text-balance text-lg font-semibold">Draw like a real TeleSketch</h1>
+                      <button
+                        type="button"
+                        className="min-h-10 shrink-0 px-2 text-sm font-medium underline underline-offset-4"
+                        onClick={() => setInfoOpen(false)}
+                      >
+                        close
+                      </button>
+                    </div>
+                    <ol className="list-decimal space-y-2 pl-5 text-pretty text-sm leading-6">
+                      <li>Turn the left dial to draw left and right.</li>
+                      <li>Turn the right dial to draw up and down.</li>
+                      <li>Grab any red part and shake it quickly up and down to erase.</li>
+                    </ol>
+                  </motion.aside>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
