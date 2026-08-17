@@ -382,17 +382,20 @@ export default function TormiSketchPage() {
         .etch-brand-strip {
           display: flex;
           width: 56px;
-          height: 320px;
+          height: 360px;
           align-items: center;
           justify-content: center;
           color: #fff;
         }
         .etch-brand-word {
           font-family: var(--font-display);
-          font-size: 30px;
+          font-size: 34px;
           line-height: 1;
           white-space: nowrap;
-          text-shadow: 0 3px 0 rgba(0,0,0,0.3), 0 8px 20px rgba(0,0,0,0.58);
+          text-shadow:
+            0 2px 0 rgba(0, 0, 0, 0.52),
+            0 7px 16px rgba(0, 0, 0, 0.68),
+            0 16px 34px rgba(0, 0, 0, 0.38);
           transform: rotate(90deg);
         }
 
@@ -434,7 +437,7 @@ export default function TormiSketchPage() {
         @media (max-width: 767px) {
           .etch-action { width: 48px; height: 48px; }
           .etch-brand-strip { width: 48px; height: 180px; }
-          .etch-brand-word { font-size: 22px; transform: rotate(90deg) scaleX(0.7); }
+          .etch-brand-word { font-size: 24px; transform: rotate(90deg) scaleX(0.66); }
           .etch-knob { width: clamp(82px, 24vw, 102px); }
         }
 
