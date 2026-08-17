@@ -379,6 +379,25 @@ export default function TormiSketchPage() {
           outline-offset: 3px;
         }
 
+        .etch-brand-strip {
+          display: flex;
+          width: 56px;
+          height: 156px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 10px;
+          background: #f7f5ed;
+          color: #171717;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.34), inset 0 0 0 1px rgba(0,0,0,0.1);
+        }
+        .etch-brand-word {
+          font-family: var(--font-display);
+          font-size: 13px;
+          line-height: 1;
+          writing-mode: vertical-rl;
+          text-orientation: mixed;
+        }
+
         .etch-shell { cursor: grab; touch-action: none; }
         .etch-shell:active { cursor: grabbing; }
         [data-no-shake] { cursor: default; }
@@ -416,6 +435,8 @@ export default function TormiSketchPage() {
 
         @media (max-width: 767px) {
           .etch-action { width: 48px; height: 48px; }
+          .etch-brand-strip { width: 48px; height: 112px; }
+          .etch-brand-word { font-size: 10px; }
           .etch-knob { width: clamp(82px, 24vw, 102px); }
         }
 
@@ -455,21 +476,15 @@ export default function TormiSketchPage() {
         ) : (
           <motion.div
             key="app"
-            className="relative mx-auto grid size-full max-w-[1344px] grid-cols-2 grid-rows-[48px_minmax(0,1fr)] gap-y-3 md:grid-cols-[56px_minmax(0,1200px)_56px] md:grid-rows-1 md:gap-x-4 md:gap-y-0"
+            className="relative mx-auto grid size-full max-w-[1344px] grid-cols-2 grid-rows-[112px_minmax(0,1fr)] gap-y-3 md:grid-cols-[56px_minmax(0,1200px)_56px] md:grid-rows-1 md:gap-x-4 md:gap-y-0"
             initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
           >
-            <div className="z-20 col-start-1 row-start-1 flex items-start justify-start md:items-center">
-              <button
-                type="button"
-                className="etch-action"
-                aria-label="Download drawing"
-                title="Download drawing"
-                onClick={downloadDrawing}
-              >
-                <Download width={30} height={30} aria-hidden="true" />
-              </button>
+            <div className="z-20 col-start-1 row-start-1 flex items-start justify-start">
+              <div className="etch-brand-strip" aria-label="TormiSketch">
+                <span className="etch-brand-word" aria-hidden="true">TORMISKETCH</span>
+              </div>
             </div>
 
             <motion.div
@@ -516,7 +531,16 @@ export default function TormiSketchPage() {
               <p className="sr-only" aria-live="polite">{eraseStatus}</p>
             </motion.div>
 
-            <div className="relative z-20 col-start-2 row-start-1 flex items-start justify-end md:col-start-3 md:items-center">
+            <div className="relative z-20 col-start-2 row-start-1 flex flex-col items-end justify-start gap-2 md:col-start-3">
+              <button
+                type="button"
+                className="etch-action"
+                aria-label="Download drawing"
+                title="Download drawing"
+                onClick={downloadDrawing}
+              >
+                <Download width={30} height={30} aria-hidden="true" />
+              </button>
               <button
                 type="button"
                 className="etch-action"
@@ -533,7 +557,7 @@ export default function TormiSketchPage() {
                 {infoOpen && (
                   <motion.aside
                     id="tormisketch-info"
-                    className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl md:right-[calc(100%+12px)] md:top-[calc(50%_-_105px)]"
+                    className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl md:right-[calc(100%+12px)] md:top-0"
                     initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
