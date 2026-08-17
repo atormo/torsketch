@@ -28,3 +28,13 @@ next-env.d.ts
 # Operating-system files
 .DS_Store
 *.pem
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+
+!.env.example
