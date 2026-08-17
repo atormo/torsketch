@@ -462,7 +462,7 @@ export default function TorSketchPage() {
             0 16px 34px rgba(0, 0, 0, 0.38);
         }
 
-        .etch-shell { cursor: grab; touch-action: none; }
+        .etch-shell { cursor: pointer; touch-action: none; }
         .etch-shell:active { cursor: grabbing; }
         [data-no-shake] { cursor: default; }
 
