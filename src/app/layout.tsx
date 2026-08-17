@@ -10,8 +10,8 @@ const spaceGrotesk = localFont({
   display: "swap",
 });
 
-const michroma = localFont({
-  src: "../fonts/Michroma-Regular.ttf",
+const archivoBlack = localFont({
+  src: "../fonts/ArchivoBlack-Regular.woff2",
   weight: "400",
   style: "normal",
   variable: "--font-display",
@@ -23,8 +23,26 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "TormiSketch",
+  metadataBase: new URL("https://torsketch.tormo.at"),
+  title: "TorSketch",
   description: "A mechanical two-dial drawing toy for the browser.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "TorSketch",
+    description: "A mechanical two-dial drawing toy for the browser.",
+    url: "/",
+    siteName: "TorSketch",
+    type: "website",
+    images: ["/torsketch-hills.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TorSketch",
+    description: "A mechanical two-dial drawing toy for the browser.",
+    images: ["/torsketch-hills.png"],
+  },
 };
 
 export default function RootLayout({
@@ -33,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${michroma.variable}`}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${archivoBlack.variable}`}>
       <body>{children}</body>
     </html>
   );

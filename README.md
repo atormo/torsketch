@@ -1,8 +1,8 @@
-# TormiSketch
+# TorSketch
 
-TormiSketch is a browser-based mechanical drawing toy inspired by the classic two-dial TeleSketch. Turn the left dial to draw horizontally, turn the right dial to draw vertically, and shake the red frame to erase the drawing progressively.
+TorSketch is a browser-based mechanical drawing toy inspired by the classic two-dial TeleSketch. Turn the left dial to draw horizontally, turn the right dial to draw vertically, and shake the red frame to erase the drawing progressively.
 
-This repository is the standalone, open-source extraction of the original TormiSketch page from the Tormius website.
+This repository contains the standalone, open-source TorSketch experience from [tormo.at](https://tormo.at).
 
 ## Run locally
 
@@ -34,8 +34,8 @@ pnpm start
 - `src/app/page.tsx` contains the drawing application.
 - `src/app/layout.tsx` loads the local open-source typefaces and page metadata.
 - Pixelarticons provides the download and information controls under the MIT License.
-- `src/fonts` contains Space Grotesk and Michroma together with their OFL licences.
-- `public/tormisketch-hills.png` is the original, AI-generated interface background.
+- `src/fonts` contains Space Grotesk, Archivo Black, and Michroma together with their OFL licences.
+- `public/torsketch-hills.png` is the original, AI-generated interface background.
 
 ## Contributing
 
@@ -45,8 +45,8 @@ Bug reports and pull requests are welcome. Please run `pnpm lint` and `pnpm buil
 
 The source code is available under the MIT License.
 
-The landscape in `public/tormisketch-hills.png` was generated specifically for TormiSketch with OpenAI image generation. It is not an edit of, nor derived from, the Windows XP “Bliss” photograph. To the extent the project authors hold rights in the generated output, it is distributed under the same MIT License as the source code.
+The landscape in `public/torsketch-hills.png` was generated specifically for TorSketch with OpenAI image generation. It is not an edit of, nor derived from, the Windows XP “Bliss” photograph. To the extent the project authors hold rights in the generated output, it is distributed under the same MIT License as the source code.
 
-Space Grotesk and Michroma are distributed under the SIL Open Font License 1.1. Their complete licence texts are included in `src/fonts`.
+Space Grotesk, Archivo Black, and Michroma are distributed under the SIL Open Font License 1.1. Their complete licence texts are included in `src/fonts`.
 
 Pixelarticons is distributed under the MIT License.

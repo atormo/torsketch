@@ -100,6 +100,10 @@ function EtchKnob({ axis, rotation, onTurn }: EtchKnobProps) {
   const label = axis === "horizontal"
     ? "Horizontal drawing dial. Turn it or use the left and right arrow keys."
     : "Vertical drawing dial. Turn it or use the up and down arrow keys.";
+  const counterclockwiseLabel = axis === "horizontal" ? "Left" : "Up";
+  const clockwiseLabel = axis === "horizontal" ? "Right" : "Down";
+  const counterclockwisePathId = `etch-${axis}-counterclockwise`;
+  const clockwisePathId = `etch-${axis}-clockwise`;
 
   return (
     <button
@@ -109,20 +113,45 @@ function EtchKnob({ axis, rotation, onTurn }: EtchKnobProps) {
       aria-label={label}
       title={axis === "horizontal" ? "Draw left and right" : "Draw up and down"}
       className="etch-knob relative shrink-0 rounded-full"
-      style={{ transform: `rotate(${rotation}deg)` }}
       onPointerDown={startTurning}
       onPointerMove={turn}
       onPointerUp={stopTurning}
       onPointerCancel={stopTurning}
       onKeyDown={useKeyboard}
     >
-      <span className="etch-knob-cap pointer-events-none absolute inset-[13%] rounded-full" />
-      <span className="etch-knob-mark pointer-events-none absolute left-1/2 top-[12%] -translate-x-1/2" />
+      <span
+        className="etch-knob-rotor pointer-events-none absolute inset-0"
+        style={{ transform: `rotate(${rotation}deg)` }}
+      >
+        <svg
+          className="etch-knob-guide absolute inset-0 size-full"
+          viewBox="0 0 100 100"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <defs>
+            <path id={counterclockwisePathId} d="M 12 49 A 38 38 0 0 1 46 12" />
+            <path id={clockwisePathId} d="M 54 12 A 38 38 0 0 1 88 49" />
+          </defs>
+          <text>
+            <textPath href={`#${counterclockwisePathId}`} startOffset="50%" textAnchor="middle">
+              {counterclockwiseLabel}
+            </textPath>
+          </text>
+          <text>
+            <textPath href={`#${clockwisePathId}`} startOffset="50%" textAnchor="middle">
+              {clockwiseLabel}
+            </textPath>
+          </text>
+        </svg>
+        <span className="etch-knob-cap absolute inset-[13%] rounded-full" />
+        <span className="etch-knob-mark absolute left-1/2 top-[12%] -translate-x-1/2" />
+      </span>
     </button>
   );
 }
 
-export default function TormiSketchPage() {
+export default function TorSketchPage() {
   const [booted, setBooted] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [leftRotation, setLeftRotation] = useState(0);
@@ -138,14 +167,20 @@ export default function TormiSketchPage() {
   const hasDrawing = useRef(false);
   const shakeGesture = useRef<{
     pointerId: number;
+    startX: number;
     startY: number;
+    lastX: number;
     lastY: number;
     lastTime: number;
     direction: number;
   } | null>(null);
 
-  const shellOffset = useMotionValue(0);
-  const shellY = useSpring(shellOffset, { stiffness: 760, damping: 52, mass: 0.35 });
+  const shellXOffset = useMotionValue(0);
+  const shellYOffset = useMotionValue(0);
+  const shellRotateOffset = useMotionValue(0);
+  const shellX = useSpring(shellXOffset, { stiffness: 460, damping: 30, mass: 0.5 });
+  const shellY = useSpring(shellYOffset, { stiffness: 520, damping: 32, mass: 0.55 });
+  const shellRotate = useSpring(shellRotateOffset, { stiffness: 420, damping: 26, mass: 0.45 });
 
   useEffect(() => {
     const timer = setTimeout(() => setBooted(true), reduceMotion ? 0 : 1400);
@@ -283,7 +318,9 @@ export default function TormiSketchPage() {
 
     shakeGesture.current = {
       pointerId: event.pointerId,
+      startX: event.clientX,
       startY: event.clientY,
+      lastX: event.clientX,
       lastY: event.clientY,
       lastTime: performance.now(),
       direction: 0,
@@ -295,17 +332,31 @@ export default function TormiSketchPage() {
     const gesture = shakeGesture.current;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
 
-    shellOffset.set(clamp((event.clientY - gesture.startY) * 0.16, -10, 10));
-    if (!hasDrawing.current) return;
-
     const now = performance.now();
+    const deltaX = event.clientX - gesture.lastX;
     const deltaY = event.clientY - gesture.lastY;
     const elapsed = Math.max(1, now - gesture.lastTime);
-    if (Math.abs(deltaY) < 4) return;
+    const speed = Math.abs(deltaY) / elapsed;
+
+    if (!reduceMotion) {
+      const travelX = event.clientX - gesture.startX;
+      const travelY = event.clientY - gesture.startY;
+      const verticalImpulse = clamp(deltaY * 0.09, -2.6, 2.6);
+
+      shellXOffset.set(clamp(travelX * 0.18 - verticalImpulse * 1.35 + deltaX * 0.12, -8, 8));
+      shellYOffset.set(clamp(travelY * 0.28 + deltaY * 0.22, -26, 26));
+      shellRotateOffset.set(clamp(travelX * 0.025 - verticalImpulse * 0.78, -2.2, 2.2));
+    }
+
+    if (Math.abs(deltaY) < 3) {
+      gesture.lastX = event.clientX;
+      gesture.lastY = event.clientY;
+      gesture.lastTime = now;
+      return;
+    }
 
     const direction = Math.sign(deltaY);
-    const speed = Math.abs(deltaY) / elapsed;
-    if (gesture.direction !== 0 && direction !== gesture.direction && speed > 0.22) {
+    if (hasDrawing.current && gesture.direction !== 0 && direction !== gesture.direction && speed > 0.22) {
       const increment = clamp(0.08 + speed * 0.035, 0.09, 0.16);
       eraseProgress.current = clamp(eraseProgress.current + increment, 0, 1);
       fadeDrawing(clamp(0.12 + speed * 0.035, 0.13, 0.24));
@@ -318,6 +369,7 @@ export default function TormiSketchPage() {
     }
 
     gesture.direction = direction;
+    gesture.lastX = event.clientX;
     gesture.lastY = event.clientY;
     gesture.lastTime = now;
   };
@@ -325,7 +377,9 @@ export default function TormiSketchPage() {
   const stopShaking = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (shakeGesture.current?.pointerId !== event.pointerId) return;
     shakeGesture.current = null;
-    shellOffset.set(0);
+    shellXOffset.set(0);
+    shellYOffset.set(0);
+    shellRotateOffset.set(0);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -335,7 +389,7 @@ export default function TormiSketchPage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const link = document.createElement("a");
-    link.download = "tormisketch.png";
+    link.download = "torsketch.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
   }, []);
@@ -344,7 +398,7 @@ export default function TormiSketchPage() {
     <main
       className="fixed inset-0 overflow-hidden bg-cover bg-center p-3 md:p-4"
       style={{
-        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.14) 0 0.7px, transparent 0.8px), url('/tormisketch-hills.png')",
+        backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.14) 0 0.7px, transparent 0.8px), url('/torsketch-hills.png')",
         backgroundSize: "4px 4px, cover",
         backgroundPosition: "0 0, center",
         backgroundRepeat: "repeat, no-repeat",
@@ -356,6 +410,12 @@ export default function TormiSketchPage() {
           to { clip-path: inset(0 0 0 0); }
         }
 
+        .boot-letter {
+          font-family: var(--font-display);
+          font-synthesis: none;
+          font-weight: 400;
+          text-transform: uppercase;
+        }
         .etch-action {
           display: inline-flex;
           width: 56px;
@@ -383,20 +443,23 @@ export default function TormiSketchPage() {
           display: flex;
           width: 56px;
           height: 360px;
-          align-items: center;
+          align-items: flex-start;
           justify-content: center;
           color: #fff;
         }
         .etch-brand-word {
           font-family: var(--font-display);
-          font-size: 34px;
+          font-size: 48px;
+          font-synthesis: none;
+          font-weight: 400;
           line-height: 1;
           white-space: nowrap;
+          text-transform: uppercase;
+          writing-mode: vertical-rl;
           text-shadow:
             0 2px 0 rgba(0, 0, 0, 0.52),
             0 7px 16px rgba(0, 0, 0, 0.68),
             0 16px 34px rgba(0, 0, 0, 0.38);
-          transform: rotate(90deg);
         }
 
         .etch-shell { cursor: grab; touch-action: none; }
@@ -421,6 +484,16 @@ export default function TormiSketchPage() {
           outline: 4px solid rgba(255,255,255,0.92);
           outline-offset: 6px;
         }
+        .etch-knob-guide {
+          color: #66645e;
+        }
+        .etch-knob-guide text {
+          fill: currentColor;
+          font-family: var(--font-interface);
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
         .etch-knob-cap {
           background: radial-gradient(circle at 38% 32%, #fffdf5 0%, #dedacc 72%, #c1bcad 100%);
           box-shadow: inset 0 1px 2px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.18);
@@ -437,7 +510,7 @@ export default function TormiSketchPage() {
         @media (max-width: 767px) {
           .etch-action { width: 48px; height: 48px; }
           .etch-brand-strip { width: 48px; height: 180px; }
-          .etch-brand-word { font-size: 24px; transform: rotate(90deg) scaleX(0.66); }
+          .etch-brand-word { font-size: 27px; }
           .etch-knob { width: clamp(82px, 24vw, 102px); }
         }
 
@@ -456,14 +529,13 @@ export default function TormiSketchPage() {
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.35, ease: "easeOut" }}
           >
-            <div className="flex" aria-label="TormiSketch">
-              {"TORMISKETCH".split("").map((letter, index) => (
+            <div className="flex" aria-label="TorSketch">
+              {"TorSketch".split("").map((letter, index) => (
                 <span
                   key={`${letter}-${index}`}
                   className="boot-letter inline-block text-white"
                   style={{
-                    fontFamily: "var(--font-display)",
-                    fontSize: "clamp(32px, 7vw, 56px)",
+                    fontSize: "clamp(52px, 13vw, 132px)",
                     animation: `letter-fill 0.1s ${index * 0.055}s ease-out forwards`,
                     clipPath: "inset(100% 0 0 0)",
                   }}
@@ -483,15 +555,17 @@ export default function TormiSketchPage() {
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: "easeOut" }}
           >
             <div className="z-20 col-start-1 row-start-1 flex items-start justify-start">
-              <div className="etch-brand-strip" aria-label="TormiSketch">
-                <span className="etch-brand-word" aria-hidden="true">TORMISKETCH</span>
+              <div className="etch-brand-strip" aria-label="TorSketch">
+                <span className="etch-brand-word" aria-hidden="true">TorSketch</span>
               </div>
             </div>
 
             <motion.div
               className="etch-shell relative col-span-2 row-start-2 flex min-h-0 flex-col rounded-[30px] px-3 pb-4 pt-3 md:col-span-1 md:col-start-2 md:row-start-1 md:px-6 md:pb-5 md:pt-5"
               style={{
-                y: reduceMotion ? shellOffset : shellY,
+                x: reduceMotion ? 0 : shellX,
+                y: reduceMotion ? 0 : shellY,
+                rotate: reduceMotion ? 0 : shellRotate,
                 background: "linear-gradient(158deg, #e43736 0%, #c61d1d 54%, #d52a29 100%)",
                 boxShadow: "0 28px 90px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -4px 0 rgba(0,0,0,0.24)",
               }}
@@ -513,7 +587,7 @@ export default function TormiSketchPage() {
                   ref={canvasRef}
                   className="pointer-events-none absolute inset-0 size-full"
                   role="img"
-                  aria-label="TormiSketch drawing surface"
+                  aria-label="TorSketch drawing surface"
                 />
                 <div
                   className="pointer-events-none absolute inset-0"
@@ -545,10 +619,10 @@ export default function TormiSketchPage() {
               <button
                 type="button"
                 className="etch-action"
-                aria-label="How to use TormiSketch"
+                aria-label="How to use TorSketch"
                 aria-expanded={infoOpen}
-                aria-controls="tormisketch-info"
-                title="How to use TormiSketch"
+                aria-controls="torsketch-info"
+                title="How to use TorSketch"
                 onClick={() => setInfoOpen((open) => !open)}
               >
                 <InfoBox width={30} height={30} aria-hidden="true" />
@@ -557,29 +631,31 @@ export default function TormiSketchPage() {
               <AnimatePresence initial={false}>
                 {infoOpen && (
                   <motion.aside
-                    id="tormisketch-info"
+                    id="torsketch-info"
                     className="absolute right-0 top-[calc(100%+10px)] w-[min(330px,calc(100vw-24px))] rounded-lg bg-[#f7f5ed] p-5 text-[#171717] shadow-2xl md:right-[calc(100%+12px)] md:top-0"
                     initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.96, y: reduceMotion ? 0 : -4 }}
                     transition={{ duration: reduceMotion ? 0 : 0.15, ease: "easeOut" }}
-                    aria-label="How to use TormiSketch"
+                    aria-label="How to use TorSketch"
                   >
-                    <div className="mb-3 flex items-start justify-between gap-4">
-                      <h1 className="text-balance text-lg font-semibold">Draw like a real TeleSketch</h1>
-                      <button
-                        type="button"
-                        className="min-h-10 shrink-0 px-2 text-sm font-medium underline underline-offset-4"
-                        onClick={() => setInfoOpen(false)}
-                      >
-                        close
-                      </button>
-                    </div>
+                    <h1 className="mb-3 text-balance text-lg font-semibold">Draw like a real TeleSketch</h1>
                     <ol className="list-decimal space-y-2 pl-5 text-pretty text-sm leading-6">
                       <li>Turn the left dial to draw left and right.</li>
                       <li>Turn the right dial to draw up and down.</li>
                       <li>Grab any red part and shake it quickly up and down to erase.</li>
                     </ol>
+                    <p className="mt-4 text-left text-xs text-black/60">
+                      made by{" "}
+                      <a
+                        href="https://tormo.at"
+                        className="font-medium text-black underline underline-offset-4 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        tormo.at
+                      </a>
+                    </p>
                   </motion.aside>
                 )}
               </AnimatePresence>
